@@ -108,7 +108,7 @@ void parse(int fd){
 
 void extract(int fd, int section, int line){
     lseek(fd, 2+2+2+1+(19+4+4+4)*(section-1), SEEK_SET);
-    char buff;
+    char buff[4];
     while(1){
         read(fd, buff, 1);
         if(buff != '\n')
