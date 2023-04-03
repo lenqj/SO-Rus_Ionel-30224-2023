@@ -61,7 +61,7 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
     return 1;
 }
 
-void parse(int fd){
+int parse(int fd, int flagParse){
     char magic[2];
     int header_size;
     int version;
@@ -69,18 +69,18 @@ void parse(int fd){
     read(fd, &magic, 2);
     if(strcmp(magic, "1c") != 0){
         printf("ERROR\nwrong magic\n");
-        return;
+        return 0;
     }
     read(fd, &header_size, 2);
     read(fd, &version, 2);
     if(version < 23 || version > 107){
         printf("ERROR\nwrong version\n");
-        return;
+        return 0;
     }
     read(fd, &no_of_sections, 1);
     if(no_of_sections < 8 || no_of_sections > 14){
         printf("ERROR\nwrong sect_nr\n");
-        return;
+        return 0;
     }
     sectionStruct *sections = (sectionStruct*)calloc(no_of_sections, sizeof(sectionStruct));
     int i = 0;
@@ -90,29 +90,39 @@ void parse(int fd){
         read(fd, &sections[i].type, 4);
         if (sections[i].type != 10 && sections[i].type != 99 && sections[i].type != 46 && sections[i].type != 34){
 			printf("ERROR\nwrong sect_types\n");
-			return;
+			return 0;
 		}
         read(fd, &sections[i].offset, 4);
         read(fd, &sections[i].size, 4);
         i++;
     }
-    i = 0;
-    printf("SUCCESS\n");
-    printf("version=%d\n", version);
-    printf("nr_sections=%d\n", no_of_sections);
-    while(i < no_of_sections){
-        printf("section%d: %s %d %d\n", i+1, sections[i].name, sections[i].type, sections[i].size);
-        i++;
-    }
+    if(flagParse == 1)
+    {
+        i = 0;
+        printf("SUCCESS\n");
+        printf("version=%d\n", version);
+        printf("nr_sections=%d\n", no_of_sections);
+        while(i < no_of_sections){
+            printf("section%d: %s %d %d\n", i+1, sections[i].name, sections[i].type, sections[i].size);
+            i++;
+        }
+    }   
+    return no_of_sections;
 }
 
 void extract(int fd, int section, int line){
-    lseek(fd, 2+2+2+1+(19+4+4+4)*(section-1), SEEK_SET);
-    char buff[4];
-    while(1){
-        read(fd, buff, 1);
-        if(buff != '\n')
+    lseek(fd, -(2+2+2+1+(19+4+4+4)*(section+1)), SEEK_END);
+    char c;
+    int nr = 0;
+    while(read(fd, &c, 1)){
+        if(c == '\n'){
+            nr++;
+        }
+        if(nr == line)
+            break;
     }
+    char buff[1024];
+    read(fd, buff, 1024);
     puts(buff);
 }
 int main(int argc, char **argv)
@@ -189,7 +199,7 @@ int main(int argc, char **argv)
             {
                 printf("ERROR\ninvalid file");
             }else{
-                parse(fd);
+                parse(fd, 1);
             }
             free(path);
         }
