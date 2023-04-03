@@ -111,7 +111,8 @@ int parse(int fd, int flagParse){
 }
 
 void extract(int fd, int section, int line){
-    lseek(fd, -(2+2+2+1+(19+4+4+4)*(section+1)), SEEK_END);
+    lseek(fd, -(19+4+4+4)*(section+1), SEEK_END);
+
     char c;
     int nr = 0;
     while(read(fd, &c, 1)){
@@ -202,6 +203,7 @@ int main(int argc, char **argv)
                 parse(fd, 1);
             }
             free(path);
+            close(fd);
         }
         if (strcmp(argv[1], "extract") == 0 && strncmp(argv[2], "path=", 5)  == 0 && strncmp(argv[3], "section=", 8)  == 0 && strncmp(argv[4], "line=", 5)  == 0)
         {
@@ -231,6 +233,10 @@ int main(int argc, char **argv)
                 int lineInt = atoi(line);
                 extract(fd, sectionInt, lineInt);
             }
+            free(path);
+            free(section);
+            free(line);
+            close(fd);
         }
 
     }
