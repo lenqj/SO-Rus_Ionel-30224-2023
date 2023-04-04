@@ -71,7 +71,7 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
 sectionHeader* parse(int fd, int flagParse){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
     read(fd, &header->magic, 2);
-    header->magic[2] = '\0';
+    header->magic[3] = '\0';
     if(strcmp(header->magic, "1c") != 0){
         printf("ERROR\nwrong magic\n");
         return NULL;
@@ -104,33 +104,32 @@ sectionHeader* parse(int fd, int flagParse){
     return header;
 }
 void printSection(sectionHeader* header){
-        int i = 0;
-        printf("SUCCESS\n");
-        printf("version=%d\n", header->version);
-        printf("nr_sections=%d\n", header->no_of_sections);
-        while(i < header->no_of_sections){
-            printf("section%d: %s %d %d\n", i+1, header->sections[i].name, header->sections[i].type, header->sections[i].size);                
-            i++;
-        }  
+    int i = 0;
+    printf("SUCCESS\n");
+    printf("version=%d\n", header->version);
+    printf("nr_sections=%d\n", header->no_of_sections);
+    while(i < header->no_of_sections){
+        printf("section%d: %s %d %d\n", i+1, header->sections[i].name, header->sections[i].type, header->sections[i].size);                
+        i++;
+    }  
 }
 
 void extract(int fd, int section, int line){
-    lseek(fd, 0, SEEK_SET);
-    //sectionStruct *sections = parse(fd, 1);
-    //lseek(fd, sections[section].offset, SEEK_SET);
+    sectionHeader *header = parse(fd, 1);
+    lseek(fd, header->sections[section].offset, SEEK_SET);
 
     char c[2];
     int nr = 0;
-    while(read(fd, &c, 1) && line > 0){
+    while(read(fd, &c, 2) && line > 0){
         if((strcmp(c, "\x0D\x0A")) == 0){
             nr++;
         }
         if(nr == (line))
             break;
     }
-    char buff;
-    while(read(fd, &buff, 1) > 0){
-        printf("%c", buff);
+    char buff[2];
+    while(read(fd, &buff, 2) > 0){
+        printf("%c%c", buff[0], buff[1]);
     }
     printf("\n");
     //free(sections);
@@ -194,13 +193,17 @@ int main(int argc, char **argv)
             }
             puts("SUCCESS");
             listCurrent(path, name_starts_with, has_perm_write, recursive);
-            free(path);
-            free(name_starts_with);
-        }
+            if(path != NULL){
+                free(path);
+            }
+            if(name_starts_with != NULL){
+                free(name_starts_with);
+            }        }
         if (strcmp(argv[1], "parse") == 0 && strncmp(argv[2], "path=", 5)  == 0)
         {
             char *auxPath = argv[2];
             char *path = (char*)calloc(strlen(auxPath), sizeof(char));
+            sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
             for(int i = 0; i < strlen(auxPath);i++){
                 path[i] = auxPath[i+5];
             }
@@ -209,12 +212,18 @@ int main(int argc, char **argv)
             {
                 printf("ERROR\ninvalid file");
             }else{
-                sectionHeader *header = parse(fd, 1);
+                header = parse(fd, 1);
                 if(header!=NULL){
                     printSection(header);
                 }
             }
-            free(path);
+            if(path != NULL){
+                free(path);
+            } 
+            if(header!=NULL){
+                free(header->sections);
+                free(header);
+            }
             close(fd);
         }
         if (strcmp(argv[1], "extract") == 0 && strncmp(argv[2], "path=", 5)  == 0 && strncmp(argv[3], "section=", 8)  == 0 && strncmp(argv[4], "line=", 5)  == 0)
@@ -244,9 +253,15 @@ int main(int argc, char **argv)
                 int lineInt = atoi(line);
                 extract(fd, sectionInt, lineInt);
             }
-            free(path);
-            free(section);
-            free(line);
+            if(path != NULL){
+                free(path);
+            }
+            if(section != NULL){
+                free(section);
+            } 
+            if(line != NULL){
+                free(line);
+            }   
             close(fd);
         }
 
