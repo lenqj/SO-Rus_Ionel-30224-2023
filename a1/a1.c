@@ -13,6 +13,13 @@ typedef struct sectionStruct{
     int offset;
     int size;
 }sectionStruct;
+typedef struct sectionHeader{
+    char magic[3];
+    int header_size;
+    int version;
+    int no_of_sections;
+    struct sectionStruct *sections;
+}sectionHeader;
 
 int listCurrent(const char *path, char* name_starts_with, int has_perm_write, int recursive)
 {
@@ -61,70 +68,72 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
     return 1;
 }
 
-int parse(int fd, int flagParse){
-    char magic[2];
-    int header_size;
-    int version;
-    int no_of_sections;
-    read(fd, &magic, 2);
-    if(strcmp(magic, "1c") != 0){
+sectionHeader* parse(int fd, int flagParse){
+    sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
+    read(fd, &header->magic, 2);
+    header->magic[2] = '\0';
+    if(strcmp(header->magic, "1c") != 0){
         printf("ERROR\nwrong magic\n");
-        return 0;
+        return NULL;
     }
-    read(fd, &header_size, 2);
-    read(fd, &version, 2);
-    if(version < 23 || version > 107){
+    read(fd, &header->header_size, 2);
+    read(fd, &header->version, 2);
+    if(header->version < 23 || header->version > 107){
         printf("ERROR\nwrong version\n");
-        return 0;
+        return NULL;
     }
-    read(fd, &no_of_sections, 1);
-    if(no_of_sections < 8 || no_of_sections > 14){
+    read(fd, &header->no_of_sections, 1);
+    if(header->no_of_sections < 8 || header->no_of_sections > 14){
         printf("ERROR\nwrong sect_nr\n");
-        return 0;
+        return NULL;
     }
-    sectionStruct *sections = (sectionStruct*)calloc(no_of_sections, sizeof(sectionStruct));
     int i = 0;
-    while(i < no_of_sections){
-        read(fd, &sections[i].name, 19);
-        sections[i].name[19] = '\0';
-        read(fd, &sections[i].type, 4);
-        if (sections[i].type != 10 && sections[i].type != 99 && sections[i].type != 46 && sections[i].type != 34){
+    header->sections = (sectionStruct*)calloc(header->no_of_sections, sizeof(sectionStruct));
+    while(i < header->no_of_sections){
+        read(fd, &header->sections[i].name, 19);
+        header->sections[i].name[19] = '\0';
+        read(fd, &header->sections[i].type, 4);
+        if (header->sections[i].type != 10 && header->sections[i].type != 99 && header->sections[i].type != 46 && header->sections[i].type != 34){
 			printf("ERROR\nwrong sect_types\n");
-			return 0;
+			return NULL;
 		}
-        read(fd, &sections[i].offset, 4);
-        read(fd, &sections[i].size, 4);
+        read(fd, &header->sections[i].offset, 4);
+        read(fd, &header->sections[i].size, 4);
         i++;
     }
-    if(flagParse == 1)
-    {
-        i = 0;
+    return header;
+}
+void printSection(sectionHeader* header){
+        int i = 0;
         printf("SUCCESS\n");
-        printf("version=%d\n", version);
-        printf("nr_sections=%d\n", no_of_sections);
-        while(i < no_of_sections){
-            printf("section%d: %s %d %d\n", i+1, sections[i].name, sections[i].type, sections[i].size);
+        printf("version=%d\n", header->version);
+        printf("nr_sections=%d\n", header->no_of_sections);
+        while(i < header->no_of_sections){
+            printf("section%d: %s %d %d\n", i+1, header->sections[i].name, header->sections[i].type, header->sections[i].size);                
             i++;
-        }
-    }   
-    return no_of_sections;
+        }  
 }
 
 void extract(int fd, int section, int line){
-    lseek(fd, -(19+4+4+4)*(section+1), SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    //sectionStruct *sections = parse(fd, 1);
+    //lseek(fd, sections[section].offset, SEEK_SET);
 
-    char c;
+    char c[2];
     int nr = 0;
-    while(read(fd, &c, 1)){
-        if(c == '\n'){
+    while(read(fd, &c, 1) && line > 0){
+        if((strcmp(c, "\x0D\x0A")) == 0){
             nr++;
         }
-        if(nr == line)
+        if(nr == (line))
             break;
     }
-    char buff[1024];
-    read(fd, buff, 1024);
-    puts(buff);
+    char buff;
+    while(read(fd, &buff, 1) > 0){
+        printf("%c", buff);
+    }
+    printf("\n");
+    //free(sections);
 }
 int main(int argc, char **argv)
 {
@@ -195,12 +204,15 @@ int main(int argc, char **argv)
             for(int i = 0; i < strlen(auxPath);i++){
                 path[i] = auxPath[i+5];
             }
-            int fd;
+            int fd = -1;
             if((fd = open(path, O_RDONLY)) <= 0)
             {
                 printf("ERROR\ninvalid file");
             }else{
-                parse(fd, 1);
+                sectionHeader *header = parse(fd, 1);
+                if(header!=NULL){
+                    printSection(header);
+                }
             }
             free(path);
             close(fd);
@@ -213,7 +225,6 @@ int main(int argc, char **argv)
             char *path = (char*)calloc(strlen(auxPath), sizeof(char));
             char *section = (char*)calloc(strlen(auxSection), sizeof(char));
             char *line = (char*)calloc(strlen(auxLine), sizeof(char));
-
 
             for(int i = 0; i < strlen(auxPath);i++){
                 path[i] = auxPath[i+5];
