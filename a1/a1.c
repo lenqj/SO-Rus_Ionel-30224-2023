@@ -35,7 +35,7 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
     }
     while((entry = readdir(dir)) != NULL) {
         if(strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, ".." ) != 0 ) {
-            snprintf(fullPath, 512, "%s/%s", path, entry->d_name);
+        snprintf(fullPath, 512, "%s/%s", path, entry->d_name);
             if(lstat(fullPath, &statbuf) == 0) {
                 if(name_starts_with != NULL){
                     if(strncmp(entry->d_name, name_starts_with, strlen(name_starts_with)) == 0){
@@ -115,24 +115,92 @@ void printSection(sectionHeader* header){
 }
 
 void extract(int fd, int section, int line){
-    sectionHeader *header = parse(fd, 1);
-    lseek(fd, header->sections[section].offset, SEEK_SET);
-
-    char c[2];
-    int nr = 0;
-    while(read(fd, &c, 2) && line > 0){
-        if((strcmp(c, "\x0D\x0A")) == 0){
-            nr++;
+    sectionHeader *header = (sectionHeader*)calloc(1, sizeof(header));
+    header = parse(fd, 1);
+    lseek(fd, header->sections[section - 1].offset, SEEK_SET);
+    char buff[header->sections[section - 1].size];
+    read(fd, &buff, header->sections[section - 1].size);
+    int pos = 0;
+    for(int i = 0; i < header->sections[section - 1].size; i++){
+        char aux[2];
+        aux[0] = buff[i];
+        aux[1] = buff[i+1];
+        if(strcmp(aux, "\x0D\x0A") == 0){
+            pos++;
         }
-        if(nr == (line))
-            break;
     }
-    char buff[2];
-    while(read(fd, &buff, 2) > 0){
-        printf("%c%c", buff[0], buff[1]);
+    int *posz = (int *)calloc(pos + 1, sizeof(int));
+    int k = 1;
+    for(int i = 0; i < header->sections[section - 1].size; i++){
+        char aux[2];
+        aux[0] = buff[i];
+        aux[1] = buff[i+1];
+        if(strcmp(aux, "\x0D\x0A") == 0){
+            posz[k] = i+2;
+            k++;
+        }
     }
-    printf("\n");
-    //free(sections);
+    posz[0] = 0;
+    lseek(fd, header->sections[section - 1].offset + posz[pos - line + 1], SEEK_SET);
+    char buff2 [posz[pos - line + 2] - posz[pos - line + 1] - 1];
+    buff2[posz[pos - line + 2] - posz[pos - line + 1] - 2] = '\0';
+    read(fd, &buff2, posz[pos - line + 2] - posz[pos - line + 1] - 2);
+    printf("SUCCESS\n");
+    puts(buff2);
+    if(header!=NULL){
+        free(header->sections);
+        free(header);
+    }
+    //return buff2;
+}
+
+int checkFindAll(char *path){
+    int fd = -1;
+    if((fd = open(path, O_RDONLY)) <= 0){
+        printf("ERROR\ninvalid file");
+    }
+    sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
+    header = parse(fd, 1);
+    int cnt = 0;
+    for(int i = 0; i < header->no_of_sections; i++){
+        if(header->sections[i].type == 99){
+            cnt++;
+        }
+    }
+    if(header!=NULL){
+        free(header->sections);
+        free(header);
+    }
+    close(fd);
+    return cnt;
+}
+int findAll(char *path){
+    DIR *dir = NULL;
+    struct dirent *entry = NULL;
+    char fullPath[512];
+    struct stat statbuf;
+    dir = opendir(path);
+    if(dir == NULL) {
+        puts("ERROR");
+        puts("invalid directory path");
+        return 0;
+    }
+    while((entry = readdir(dir)) != NULL) {
+        if(strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, ".." ) != 0 ) {
+        snprintf(fullPath, 512, "%s/%s", path, entry->d_name);
+            if(lstat(fullPath, &statbuf) == 0) {
+                if(S_ISDIR(statbuf.st_mode)){
+                    findAll(fullPath);
+                }else{
+                    if(checkFindAll(fullPath) >= 2){
+                        printf("%s\n", fullPath);
+                    }
+                }
+            }
+        }
+    }
+    closedir(dir);
+    return 1;
 }
 int main(int argc, char **argv)
 {
@@ -263,6 +331,23 @@ int main(int argc, char **argv)
                 free(line);
             }   
             close(fd);
+        }
+        if (strcmp(argv[1], "findall") == 0 && strncmp(argv[2], "path=", 5)  == 0)
+        {
+            char *auxPath = argv[2];
+            char *path = (char*)calloc(strlen(auxPath), sizeof(char));
+
+            for(int i = 0; i < strlen(auxPath);i++){
+                path[i] = auxPath[i+5];
+            }
+
+            if(findAll(path) !=0){
+                printf("SUCCESS\n");
+            }
+            
+            if(path != NULL){
+                free(path);
+            }
         }
 
     }
