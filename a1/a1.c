@@ -147,13 +147,16 @@ void extract(int fd, int section, int line){
     lseek(fd, header->sections[section - 1].offset, SEEK_SET);
     char buff[header->sections[section - 1].size];
     read(fd, &buff, header->sections[section - 1].size);
+    buff[header->sections[section - 1].size - 1] = '\0';
 
 
     int totalLines = 0;
     for(int i = 0; i < header->sections[section - 1].size; i++){
-        char aux[2];
+        char aux[3];
         aux[0] = buff[i];
         aux[1] = buff[i+1];
+        aux[2] = '\0';
+
         if(strcmp(aux, "\x0D\x0A") == 0){
             totalLines++;
         }
@@ -161,9 +164,11 @@ void extract(int fd, int section, int line){
     int *linesIndex = (int *)calloc(totalLines + 1, sizeof(int));
     int k = 1;
     for(int i = 0; i < header->sections[section - 1].size; i++){
-        char aux[2];
+        char aux[3];
         aux[0] = buff[i];
         aux[1] = buff[i+1];
+        aux[2] = '\0';
+        
         if(strcmp(aux, "\x0D\x0A") == 0){
             linesIndex[k] = i+2;
             k++;
@@ -178,7 +183,9 @@ void extract(int fd, int section, int line){
 
 
     printf("SUCCESS\n");
-    puts(buff2);
+    if(buff2 != NULL){
+        puts(buff2);
+    }
     if(header!=NULL){
         free(header->sections);
         free(header);
