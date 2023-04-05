@@ -161,6 +161,22 @@ void extract(int fd, int section, int line){
             totalLines++;
         }
     }
+    if(header->no_of_sections < section){
+        printf("ERROR\nwrong section\n");  
+        if(header!=NULL){
+            free(header->sections);
+            free(header);
+        }
+        return;  
+    }
+    if(totalLines < line){
+        printf("ERROR\nwrong line\n");  
+        if(header!=NULL){
+            free(header->sections);
+            free(header);
+        } 
+        return;     
+    }
     int *linesIndex = (int *)calloc(totalLines + 1, sizeof(int));
     int k = 1;
     for(int i = 0; i < header->sections[section - 1].size; i++){
@@ -190,7 +206,7 @@ void extract(int fd, int section, int line){
         free(header->sections);
         free(header);
     }
-     if(linesIndex!=NULL){
+    if(linesIndex!=NULL){
         free(linesIndex);
     }
 }
@@ -309,7 +325,8 @@ int main(int argc, char **argv)
             }
             if(name_starts_with != NULL){
                 free(name_starts_with);
-            }        }
+            }        
+        }
         if (strcmp(argv[1], "parse") == 0 && strncmp(argv[2], "path=", 5)  == 0)
         {
             char *auxPath = argv[2];
