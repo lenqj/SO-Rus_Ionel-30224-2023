@@ -68,23 +68,41 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
     return 1;
 }
 
-sectionHeader* parse(int fd, int flagParse){
+sectionHeader* parse(int fd, int flagParse, int flagFindAll){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
     read(fd, &header->magic, 2);
     header->magic[3] = '\0';
     if(strcmp(header->magic, "1c") != 0){
-        printf("ERROR\nwrong magic\n");
+        if(flagFindAll !=1){
+            printf("ERROR\nwrong magic\n");
+        }
+        if(header!=NULL){
+            free(header->sections);
+            free(header);
+        }
         return NULL;
     }
     read(fd, &header->header_size, 2);
     read(fd, &header->version, 2);
     if(header->version < 23 || header->version > 107){
-        printf("ERROR\nwrong version\n");
+        if(flagFindAll !=1){
+            printf("ERROR\nwrong version\n");
+        }
+        if(header!=NULL){
+                free(header->sections);
+                free(header);
+            }
         return NULL;
     }
     read(fd, &header->no_of_sections, 1);
-    if(header->no_of_sections < 8 || header->no_of_sections > 14){
-        printf("ERROR\nwrong sect_nr\n");
+    if((header->no_of_sections < 8 || header->no_of_sections > 14) && flagFindAll != 1){
+        if(flagFindAll !=1){
+            printf("ERROR\nwrong sect_nr\n");
+        }
+        if(header!=NULL){
+                free(header->sections);
+                free(header);
+            }
         return NULL;
     }
     int i = 0;
@@ -94,7 +112,13 @@ sectionHeader* parse(int fd, int flagParse){
         header->sections[i].name[19] = '\0';
         read(fd, &header->sections[i].type, 4);
         if (header->sections[i].type != 10 && header->sections[i].type != 99 && header->sections[i].type != 46 && header->sections[i].type != 34){
-			printf("ERROR\nwrong sect_types\n");
+            if(flagFindAll !=1){
+                printf("ERROR\nwrong sect_types\n");        
+            }
+            if(header!=NULL){
+                free(header->sections);
+                free(header);
+            }
 			return NULL;
 		}
         read(fd, &header->sections[i].offset, 4);
@@ -116,42 +140,52 @@ void printSection(sectionHeader* header){
 
 void extract(int fd, int section, int line){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(header));
-    header = parse(fd, 1);
+    header = parse(fd, 1, 1);
+    if(header == NULL){
+        return;
+    }
     lseek(fd, header->sections[section - 1].offset, SEEK_SET);
     char buff[header->sections[section - 1].size];
     read(fd, &buff, header->sections[section - 1].size);
-    int pos = 0;
+
+
+    int totalLines = 0;
     for(int i = 0; i < header->sections[section - 1].size; i++){
         char aux[2];
         aux[0] = buff[i];
         aux[1] = buff[i+1];
         if(strcmp(aux, "\x0D\x0A") == 0){
-            pos++;
+            totalLines++;
         }
     }
-    int *posz = (int *)calloc(pos + 1, sizeof(int));
+    int *linesIndex = (int *)calloc(totalLines + 1, sizeof(int));
     int k = 1;
     for(int i = 0; i < header->sections[section - 1].size; i++){
         char aux[2];
         aux[0] = buff[i];
         aux[1] = buff[i+1];
         if(strcmp(aux, "\x0D\x0A") == 0){
-            posz[k] = i+2;
+            linesIndex[k] = i+2;
             k++;
         }
     }
-    posz[0] = 0;
-    lseek(fd, header->sections[section - 1].offset + posz[pos - line + 1], SEEK_SET);
-    char buff2 [posz[pos - line + 2] - posz[pos - line + 1] - 1];
-    buff2[posz[pos - line + 2] - posz[pos - line + 1] - 2] = '\0';
-    read(fd, &buff2, posz[pos - line + 2] - posz[pos - line + 1] - 2);
+    linesIndex[0] = 0;
+    lseek(fd, header->sections[section - 1].offset + linesIndex[totalLines - line + 1], SEEK_SET);
+
+    char buff2 [linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 1];
+    buff2[linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2] = '\0';
+    read(fd, &buff2, linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2);
+
+
     printf("SUCCESS\n");
     puts(buff2);
     if(header!=NULL){
         free(header->sections);
         free(header);
     }
-    //return buff2;
+     if(linesIndex!=NULL){
+        free(linesIndex);
+    }
 }
 
 int checkFindAll(char *path){
@@ -160,7 +194,10 @@ int checkFindAll(char *path){
         printf("ERROR\ninvalid file");
     }
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
-    header = parse(fd, 1);
+    header = parse(fd, 1, 1);
+    if(header == NULL){
+        return 0;
+    }
     int cnt = 0;
     for(int i = 0; i < header->no_of_sections; i++){
         if(header->sections[i].type == 99){
@@ -174,7 +211,7 @@ int checkFindAll(char *path){
     close(fd);
     return cnt;
 }
-int findAll(char *path){
+void findAll(char *path){
     DIR *dir = NULL;
     struct dirent *entry = NULL;
     char fullPath[512];
@@ -183,7 +220,7 @@ int findAll(char *path){
     if(dir == NULL) {
         puts("ERROR");
         puts("invalid directory path");
-        return 0;
+        return;
     }
     while((entry = readdir(dir)) != NULL) {
         if(strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, ".." ) != 0 ) {
@@ -200,7 +237,6 @@ int findAll(char *path){
         }
     }
     closedir(dir);
-    return 1;
 }
 int main(int argc, char **argv)
 {
@@ -280,7 +316,7 @@ int main(int argc, char **argv)
             {
                 printf("ERROR\ninvalid file");
             }else{
-                header = parse(fd, 1);
+                header = parse(fd, 1, 0);
                 if(header!=NULL){
                     printSection(header);
                 }
@@ -312,7 +348,7 @@ int main(int argc, char **argv)
             for(int i = 0; i < strlen(auxLine);i++){
                 line[i] = auxLine[i+5];
             }
-            int fd;
+            int fd = -1;
             if((fd = open(path, O_RDONLY)) <= 0)
             {
                 printf("ERROR\ninvalid file");
@@ -340,11 +376,8 @@ int main(int argc, char **argv)
             for(int i = 0; i < strlen(auxPath);i++){
                 path[i] = auxPath[i+5];
             }
-
-            if(findAll(path) !=0){
-                printf("SUCCESS\n");
-            }
-            
+            puts("SUCCESS");
+            findAll(path);
             if(path != NULL){
                 free(path);
             }
