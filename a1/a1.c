@@ -14,7 +14,7 @@ typedef struct sectionStruct{
     int size;
 }sectionStruct;
 typedef struct sectionHeader{
-    char magic[3];
+    char *magic;
     int header_size;
     int version;
     int no_of_sections;
@@ -68,41 +68,31 @@ int listCurrent(const char *path, char* name_starts_with, int has_perm_write, in
     return 1;
 }
 
-sectionHeader* parse(int fd, int flagParse, int flagFindAll){
+sectionHeader* parse(int fd, int flagFindAll){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
-    read(fd, &header->magic, 2);
-    header->magic[3] = '\0';
+    header->magic = (char*)calloc(3, sizeof(char));
+    read(fd, header->magic, 2);
+    header->magic[2] = '\0';
     if(strcmp(header->magic, "1c") != 0){
-        if(flagFindAll !=1){
+        if(flagFindAll != 1){
             printf("ERROR\nwrong magic\n");
-        }
-        if(header!=NULL){
-            free(header->sections);
-            free(header);
         }
         return NULL;
     }
     read(fd, &header->header_size, 2);
     read(fd, &header->version, 2);
     if(header->version < 23 || header->version > 107){
-        if(flagFindAll !=1){
+        if(flagFindAll != 1){
             printf("ERROR\nwrong version\n");
         }
-        if(header!=NULL){
-                free(header->sections);
-                free(header);
-            }
+        free(header);
         return NULL;
     }
     read(fd, &header->no_of_sections, 1);
-    if((header->no_of_sections < 8 || header->no_of_sections > 14) && flagFindAll != 1){
-        if(flagFindAll !=1){
+    if(header->no_of_sections < 8 || header->no_of_sections > 14){
+        if(flagFindAll != 1){
             printf("ERROR\nwrong sect_nr\n");
         }
-        if(header!=NULL){
-                free(header->sections);
-                free(header);
-            }
         return NULL;
     }
     int i = 0;
@@ -114,10 +104,6 @@ sectionHeader* parse(int fd, int flagParse, int flagFindAll){
         if (header->sections[i].type != 10 && header->sections[i].type != 99 && header->sections[i].type != 46 && header->sections[i].type != 34){
             if(flagFindAll !=1){
                 printf("ERROR\nwrong sect_types\n");        
-            }
-            if(header!=NULL){
-                free(header->sections);
-                free(header);
             }
 			return NULL;
 		}
@@ -140,13 +126,13 @@ void printSection(sectionHeader* header){
 
 void extract(int fd, int section, int line){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(header));
-    header = parse(fd, 1, 1);
+    header = parse(fd, 1);
     if(header == NULL){
         return;
     }
     lseek(fd, header->sections[section - 1].offset, SEEK_SET);
-    char buff[header->sections[section - 1].size];
-    read(fd, &buff, header->sections[section - 1].size);
+    char *buff = (char*)calloc(header->sections[section - 1].size, sizeof(char));
+    read(fd, buff, header->sections[section - 1].size);
     buff[header->sections[section - 1].size - 1] = '\0';
 
 
@@ -190,34 +176,31 @@ void extract(int fd, int section, int line){
             k++;
         }
     }
+    free(buff);
     linesIndex[0] = 0;
     lseek(fd, header->sections[section - 1].offset + linesIndex[totalLines - line + 1], SEEK_SET);
 
-    char buff2 [linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 1];
+    char *buff2 = (char*) calloc(linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 1, sizeof(char));
+    read(fd, buff2, linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2);
     buff2[linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2] = '\0';
-    read(fd, &buff2, linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2);
+
 
 
     printf("SUCCESS\n");
-    if(buff2 != NULL){
-        puts(buff2);
-    }
-    if(header!=NULL){
-        free(header->sections);
-        free(header);
-    }
-    if(linesIndex!=NULL){
-        free(linesIndex);
-    }
+    puts(buff2);
+    free(buff2);
+    free(header->sections);
+    free(header);
+    free(linesIndex);
 }
 
 int checkFindAll(char *path){
     int fd = -1;
-    if((fd = open(path, O_RDONLY)) <= 0){
+    if((fd = open(path, O_RDONLY)) < 0){
         printf("ERROR\ninvalid file");
     }
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(sectionHeader));
-    header = parse(fd, 1, 1);
+    header = parse(fd, 1);
     if(header == NULL){
         return 0;
     }
@@ -237,7 +220,7 @@ int checkFindAll(char *path){
 void findAll(char *path){
     DIR *dir = NULL;
     struct dirent *entry = NULL;
-    char fullPath[512];
+    char fullPath[1024];
     struct stat statbuf;
     dir = opendir(path);
     if(dir == NULL) {
@@ -247,7 +230,7 @@ void findAll(char *path){
     }
     while((entry = readdir(dir)) != NULL) {
         if(strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, ".." ) != 0 ) {
-        snprintf(fullPath, 512, "%s/%s", path, entry->d_name);
+        snprintf(fullPath, 1024, "%s/%s", path, entry->d_name);
             if(lstat(fullPath, &statbuf) == 0) {
                 if(S_ISDIR(statbuf.st_mode)){
                     findAll(fullPath);
@@ -320,12 +303,9 @@ int main(int argc, char **argv)
             }
             puts("SUCCESS");
             listCurrent(path, name_starts_with, has_perm_write, recursive);
-            if(path != NULL){
-                free(path);
-            }
-            if(name_starts_with != NULL){
-                free(name_starts_with);
-            }        
+        
+            free(path);
+            free(name_starts_with);     
         }
         if (strcmp(argv[1], "parse") == 0 && strncmp(argv[2], "path=", 5)  == 0)
         {
@@ -340,17 +320,13 @@ int main(int argc, char **argv)
             {
                 printf("ERROR\ninvalid file");
             }else{
-                header = parse(fd, 1, 0);
+                header = parse(fd, 0);
                 if(header!=NULL){
                     printSection(header);
                 }
             }
             if(path != NULL){
                 free(path);
-            } 
-            if(header!=NULL){
-                free(header->sections);
-                free(header);
             }
             close(fd);
         }
@@ -402,9 +378,7 @@ int main(int argc, char **argv)
             }
             puts("SUCCESS");
             findAll(path);
-            if(path != NULL){
-                free(path);
-            }
+            free(path);
         }
 
     }
