@@ -8,7 +8,7 @@
 #include <fcntl.h>
 
 typedef struct sectionStruct{
-    char name[20];
+    char *name;
     int type;
     int offset;
     int size;
@@ -98,7 +98,8 @@ sectionHeader* parse(int fd, int flagFindAll){
     int i = 0;
     header->sections = (sectionStruct*)calloc(header->no_of_sections, sizeof(sectionStruct));
     while(i < header->no_of_sections){
-        read(fd, &header->sections[i].name, 19);
+        header->sections[i].name = (char*)calloc(20, sizeof(char));
+        read(fd, header->sections[i].name, 19);
         header->sections[i].name[19] = '\0';
         read(fd, &header->sections[i].type, 4);
         if (header->sections[i].type != 10 && header->sections[i].type != 99 && header->sections[i].type != 46 && header->sections[i].type != 34){
@@ -119,7 +120,7 @@ void printSection(sectionHeader* header){
     printf("version=%d\n", header->version);
     printf("nr_sections=%d\n", header->no_of_sections);
     while(i < header->no_of_sections){
-        printf("section%d: %s %d %d\n", i+1, header->sections[i].name, header->sections[i].type, header->sections[i].size);                
+        printf("section%d: %s %d %d\n", i+1, header->sections[i].name, header->sections[i].type, header->sections[i].size);        
         i++;
     }  
 }
@@ -127,13 +128,10 @@ void printSection(sectionHeader* header){
 void extract(int fd, int section, int line){
     sectionHeader *header = (sectionHeader*)calloc(1, sizeof(header));
     header = parse(fd, 1);
-    if(header == NULL){
-        return;
-    }
     lseek(fd, header->sections[section - 1].offset, SEEK_SET);
-    char *buff = (char*)calloc(header->sections[section - 1].size, sizeof(char));
+    char *buff = (char*)calloc(header->sections[section - 1].size + 1, sizeof(char));
     read(fd, buff, header->sections[section - 1].size);
-    buff[header->sections[section - 1].size - 1] = '\0';
+    buff[header->sections[section - 1].size] = '\0';
 
 
     int totalLines = 0;
@@ -150,6 +148,11 @@ void extract(int fd, int section, int line){
     if(header->no_of_sections < section){
         printf("ERROR\nwrong section\n");  
         if(header!=NULL){
+            free(buff);
+            free(header->magic);
+            for(int i = 0; i < header->no_of_sections; i++){
+                free(header->sections[i].name);
+            }
             free(header->sections);
             free(header);
         }
@@ -158,6 +161,11 @@ void extract(int fd, int section, int line){
     if(totalLines < line){
         printf("ERROR\nwrong line\n");  
         if(header!=NULL){
+            free(buff);
+            free(header->magic);
+            for(int i = 0; i < header->no_of_sections; i++){
+                free(header->sections[i].name);
+            }
             free(header->sections);
             free(header);
         } 
@@ -176,7 +184,6 @@ void extract(int fd, int section, int line){
             k++;
         }
     }
-    free(buff);
     linesIndex[0] = 0;
     lseek(fd, header->sections[section - 1].offset + linesIndex[totalLines - line + 1], SEEK_SET);
 
@@ -184,11 +191,15 @@ void extract(int fd, int section, int line){
     read(fd, buff2, linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2);
     buff2[linesIndex[totalLines - line + 2] - linesIndex[totalLines - line + 1] - 2] = '\0';
 
-
-
     printf("SUCCESS\n");
     puts(buff2);
+
+    free(buff);
     free(buff2);
+    free(header->magic);
+    for(int i = 0; i < header->no_of_sections; i++){
+        free(header->sections[i].name);
+    }
     free(header->sections);
     free(header);
     free(linesIndex);
