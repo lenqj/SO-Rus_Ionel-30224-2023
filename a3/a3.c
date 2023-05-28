@@ -47,23 +47,5 @@ int main(void)
         exit(1);
     }
 
-    // while (1)
-    // {
-    //     char request[1024];
-    //     read(fdr, request, sizeof(request));
-
-    //     if (strcmp(request, "ECHO$") == 0)
-    //     {
-    //         char response_message[] = "ECHO$VARIANT$81807";
-    //         write(fdw, response_message, strlen(response_message) + 1);
-    //     }
-    //     if (strcmp(request, "EXIT$") == 0)
-    //     {
-    //         close(fdr);
-    //         close(fdw);
-    //         exit(1);
-    //     }
-    // }
-
     return 0;
 }
