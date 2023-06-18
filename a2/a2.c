@@ -129,8 +129,8 @@ int main()
             pthread_t threads[4];
             THS params[4];
             sem_t logSem[2];
-            sem_init(&logSem[0], 0, 1);
-            sem_init(&logSem[1], 0, 1);
+            sem_init(&logSem[0], 0, 0);
+            sem_init(&logSem[1], 0, 0);
             for (int i = 0; i < 4; i++)
             {
                 params[i].value = i + 1;
