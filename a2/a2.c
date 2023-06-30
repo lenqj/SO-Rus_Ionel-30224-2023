@@ -12,6 +12,9 @@ typedef struct THS
     sem_t *logSem[2];
 } THS;
 
+int running_threads = 0;
+#define MAX_THREADS 6
+
 void *thf(void *arg)
 {
     THS *s = (THS*)arg;
@@ -40,9 +43,12 @@ void *thf(void *arg)
 void *thf2(void *arg)
 {
     THS *s = (THS*)arg;
+    
     sem_wait(s->logSem[0]);
+
     info(BEGIN, 6, s->value);
     info(END, 6, s->value);
+
     sem_post(s->logSem[0]);
     // exit(0);
     return NULL;
