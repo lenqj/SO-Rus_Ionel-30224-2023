@@ -177,7 +177,7 @@ int main(void)
             unsigned int offset, value;
             read(fdr, &offset, sizeof(offset));
             read(fdr, &value, sizeof(value));
-            if (offset < 0 || offset > 2287168)
+            if (offset < 0 || offset > 2287168 || offset + sizeof(value) < 0 || offset + sizeof(value) > 2287168)
             {
                 write(fdw, "WRITE_TO_SHM$", 13);
                 write(fdw, "ERROR$", 6);
@@ -231,7 +231,7 @@ int main(void)
             unsigned int offset, no_of_bytes;
             read(fdr, &offset, sizeof(offset));
             read(fdr, &no_of_bytes, sizeof(no_of_bytes));
-            if (offset + no_of_bytes > size || SH_MEM_FILE == (void *)-1)
+            if (no_of_bytes < 0 || no_of_bytes > size || offset < 0 || offset > size || offset + no_of_bytes > size || SH_MEM_FILE == (void *)-1)
             {
                 write(fdw, "READ_FROM_FILE_OFFSET$", 22);
                 write(fdw, "ERROR$", 6);
@@ -290,9 +290,17 @@ int main(void)
             {
                 write(fdw, "READ_FROM_LOGICAL_SPACE_OFFSET$", 31);
                 write(fdw, "ERROR$", 6);
-            }else{
-                for(int i = header->no_of_sections - 1; i >= 0; i--){
-                    memcpy(SH_MEM+(header->no_of_sections - i - 1)*3072, SH_MEM_FILE+header->sections[i].offset, no_of_bytes);
+            }
+            else
+            {
+                int sizes[] = {0};
+                for (int i = header->no_of_sections - 1; i > 0; i--)
+                {
+                    sizes[i] = header->sections[i - 1].size / 3072 + i;
+                }
+                for (int i = header->no_of_sections - 1; i >= 0; i--)
+                {
+                    memcpy(SH_MEM + sizes[i] * 3072, SH_MEM_FILE + header->sections[i].offset, no_of_bytes);
                 }
                 write(fdw, "READ_FROM_LOGICAL_SPACE_OFFSET$", 31);
                 write(fdw, "SUCCESS$", 8);
