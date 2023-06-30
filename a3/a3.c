@@ -35,6 +35,7 @@ sectionHeader *parse(int fd, int flagFindAll)
     header->magic[2] = '\0';
     if (strcmp(header->magic, "1c") != 0)
     {
+        free(header);
         if (flagFindAll != 1)
         {
             printf("ERROR\nwrong magic\n");
@@ -59,6 +60,7 @@ sectionHeader *parse(int fd, int flagFindAll)
         {
             printf("ERROR\nwrong sect_nr\n");
         }
+        free(header);
         return NULL;
     }
     int i = 0;
@@ -71,6 +73,8 @@ sectionHeader *parse(int fd, int flagFindAll)
         read(fd, &header->sections[i].type, 4);
         if (header->sections[i].type != 10 && header->sections[i].type != 99 && header->sections[i].type != 46 && header->sections[i].type != 34)
         {
+            free(header->sections);
+            free(header);
             if (flagFindAll != 1)
             {
                 printf("ERROR\nwrong sect_types\n");
@@ -246,8 +250,16 @@ int main(void)
             read(fdr, &offset, sizeof(offset));
             read(fdr, &no_of_bytes, sizeof(no_of_bytes));
             sectionHeader *header = (sectionHeader *)calloc(1, sizeof(sectionHeader));
-            header = parse(fd, 1);
-            if (header == NULL || section_no > header->no_of_sections)
+            if (fd < 0)
+            {
+                header = NULL;
+            }
+            else
+            {
+                header = parse(fd, 1);
+            }
+
+            if (header == NULL || section_no > header->no_of_sections || section_no <= 0)
             {
                 write(fdw, "READ_FROM_FILE_SECTION$", 23);
                 write(fdw, "ERROR$", 6);
@@ -256,6 +268,33 @@ int main(void)
             {
                 memcpy(SH_MEM, SH_MEM_FILE + header->sections[section_no - 1].offset + offset, no_of_bytes);
                 write(fdw, "READ_FROM_FILE_SECTION$", 23);
+                write(fdw, "SUCCESS$", 8);
+            }
+        }
+        else if (strcmp(request, "READ_FROM_LOGICAL_SPACE_OFFSET") == 0)
+        {
+            unsigned int logical_offset, no_of_bytes;
+            read(fdr, &logical_offset, sizeof(logical_offset));
+            read(fdr, &no_of_bytes, sizeof(no_of_bytes));
+            sectionHeader *header = (sectionHeader *)calloc(1, sizeof(sectionHeader));
+            if (fd < 0)
+            {
+                header = NULL;
+            }
+            else
+            {
+                header = parse(fd, 1);
+            }
+
+            if (header == NULL)
+            {
+                write(fdw, "READ_FROM_LOGICAL_SPACE_OFFSET$", 31);
+                write(fdw, "ERROR$", 6);
+            }else{
+                for(int i = header->no_of_sections - 1; i >= 0; i--){
+                    memcpy(SH_MEM+(header->no_of_sections - i - 1)*3072, SH_MEM_FILE+header->sections[i].offset, no_of_bytes);
+                }
+                write(fdw, "READ_FROM_LOGICAL_SPACE_OFFSET$", 31);
                 write(fdw, "SUCCESS$", 8);
             }
         }
