@@ -294,11 +294,11 @@ int main(void)
             else
             {
                 int sizes[] = {0};
-                for (int i = header->no_of_sections - 1; i > 0; i--)
+                for (int i = 1; i < header->no_of_sections; i++)
                 {
-                    sizes[i] = header->sections[i - 1].size / 3072 + i;
+                    sizes[i] = header->sections[i - 1].size / 3072 + sizes[i-1];
                 }
-                for (int i = header->no_of_sections - 1; i >= 0; i--)
+                for (int i = 0; i < header->no_of_sections; i++)
                 {
                     memcpy(SH_MEM + sizes[i] * 3072, SH_MEM_FILE + header->sections[i].offset, no_of_bytes);
                 }
